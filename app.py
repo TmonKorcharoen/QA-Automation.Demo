@@ -42,6 +42,8 @@ if "style_guide" not in st.session_state:
 if "results"     not in st.session_state: st.session_state.results     = []
 if "raw_df"      not in st.session_state: st.session_state.raw_df      = None
 if "col_mapping" not in st.session_state: st.session_state.col_mapping = {}
+if "sel_src"     not in st.session_state: st.session_state.sel_src     = "source"
+if "sel_tgt"     not in st.session_state: st.session_state.sel_tgt     = "target"
 
 # ── Header ───────────────────────────────────────────────────────────
 st.title("🔍 Translation QA Tool")
@@ -126,8 +128,8 @@ with tab_qa:
                         })
                     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-                auto_src = mapping.get("Thai_col") or all_cols[0]
-                auto_tgt = mapping.get("English_col") or (all_cols[1] if len(all_cols)>1 else all_cols[0])
+                auto_src = mapping.get("source_col") or all_cols[0]
+                auto_tgt = mapping.get("target_col") or (all_cols[1] if len(all_cols)>1 else all_cols[0])
 
                 sel_src = st.selectbox(
                     "คอลัมน์ต้นฉบับ (Source)",
@@ -139,6 +141,8 @@ with tab_qa:
                     all_cols,
                     index=all_cols.index(auto_tgt) if auto_tgt in all_cols else min(1, len(all_cols)-1),
                 )
+                st.session_state.sel_src = sel_src
+                st.session_state.sel_tgt = sel_tgt
 
         st.subheader("QA Rules")
         rule_missing     = st.toggle("Missing translation",        value=True)
@@ -165,13 +169,15 @@ with tab_qa:
             raw_df = st.session_state.raw_df
 
             # Build working df from user-selected columns
+            _src_col = st.session_state.sel_src
+            _tgt_col = st.session_state.sel_tgt
             df = pd.DataFrame({
-                "source": raw_df[sel_src].astype(str).fillna(""),
-                "target": raw_df[sel_tgt].astype(str).fillna(""),
+                "source": raw_df[_src_col].astype(str).fillna(""),
+                "target": raw_df[_tgt_col].astype(str).fillna(""),
             })
 
             st.info(
-                f"ใช้คอลัมน์: **{sel_src}** (ต้นฉบับ)  →  **{sel_tgt}** (บทแปล) "
+                f"ใช้คอลัมน์: **{_src_col}** (ต้นฉบับ)  →  **{_tgt_col}** (บทแปล) "
                 f"| {len(df)} segments"
             )
 
@@ -186,6 +192,11 @@ with tab_qa:
                 if rule_style:       all_issues += check_style_guide(df, st.session_state.style_guide)
                 if rule_length:      all_issues += check_length(df, st.session_state.style_guide)
 
+            # Inject real column names into every issue
+            for issue in all_issues:
+                issue["src_col"] = _src_col
+                issue["tgt_col"] = _tgt_col
+
             flagged = {i["row"] for i in all_issues}
             for idx in range(len(df)):
                 if idx not in flagged:
@@ -193,6 +204,8 @@ with tab_qa:
                         "row": idx,
                         "source": df.iloc[idx]["source"],
                         "target": df.iloc[idx]["target"],
+                        "src_col": _src_col,
+                        "tgt_col": _tgt_col,
                         "rule": "—", "severity": "Pass", "message": "—",
                     })
 
@@ -226,7 +239,9 @@ with tab_qa:
             filtered = [r for r in results if r["severity"] in filter_sev]
 
             ex1, ex2, _ = st.columns([1,1,5])
-            df_out = pd.DataFrame(filtered)
+            _s = st.session_state.sel_src
+            _t = st.session_state.sel_tgt
+            df_out = pd.DataFrame(filtered).rename(columns={"source": _s, "target": _t})
             with ex1:
                 st.download_button("⬇ Export Excel", data=export_excel(df_out),
                     file_name="qa_results.xlsx",
@@ -236,7 +251,22 @@ with tab_qa:
                     file_name="qa_results.csv", mime="text/csv")
 
             SEV = {"Critical":"🔴","Major":"🟠","Minor":"🟡","Pass":"🟢"}
+
+            # Column headers using real names
+            _s = st.session_state.sel_src
+            _t = st.session_state.sel_tgt
+            hc = st.columns([0.4,2,2,1.2,1.4,2.8])
+            hc[0].markdown("**#**")
+            hc[1].markdown(f"**{_s}**")
+            hc[2].markdown(f"**{_t}**")
+            hc[3].markdown("**Rule**")
+            hc[4].markdown("**ระดับ**")
+            hc[5].markdown("**รายละเอียด**")
+            st.markdown("<hr style='margin:2px 0;border-color:#ccc;'>", unsafe_allow_html=True)
+
             for r in filtered:
+                src_label = r.get("src_col", _s)
+                tgt_label = r.get("tgt_col", _t)
                 with st.container():
                     c = st.columns([0.4,2,2,1.2,1.4,2.8])
                     c[0].write(f"**{r['row']+1}**")
