@@ -126,8 +126,8 @@ with tab_qa:
                         })
                     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-                auto_src = mapping.get("source_col") or all_cols[0]
-                auto_tgt = mapping.get("target_col") or (all_cols[1] if len(all_cols)>1 else all_cols[0])
+                auto_src = mapping.get("Thai_col") or all_cols[0]
+                auto_tgt = mapping.get("English_col") or (all_cols[1] if len(all_cols)>1 else all_cols[0])
 
                 sel_src = st.selectbox(
                     "คอลัมน์ต้นฉบับ (Source)",
